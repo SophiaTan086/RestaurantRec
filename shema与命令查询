@@ -1,0 +1,360 @@
+一、Schema
+1. 节点类型
+（1）Restaurant
+
+Restaurant
+├─ id
+├─ name
+├─ address
+├─ latitude
+├─ longitude
+├─ rating
+├─ review_count
+└─ hours
+
+（2）User
+
+User
+├─ id
+├─ username
+├─ review_count
+├─ join_date
+└─ avg_rating
+
+（3）Category
+
+Category
+└─ name
+例如：
+
+Chinese
+Italian
+Japanese
+Coffee
+Hot Pot
+
+（4）City
+
+City
+└─ name
+
+（5）State
+
+State
+└─ name
+
+（6）Country
+
+Country
+└─ name
+
+2. 关系类型
+（1）用户评论
+
+(User)
+    |
+ REVIEWED
+    |
+(Restaurant)
+（2）关系属性：
+
+rating
+review_time
+
+（3）餐厅分类
+
+(Restaurant)
+      |
+ BELONGS_TO
+      |
+(Category)
+
+（4）餐厅位置
+
+(Restaurant)
+      |
+ LOCATED_IN
+      |
+(City)
+
+（5）城市归属州
+
+(City)
+   |
+IN_STATE
+   |
+(State)
+
+（6）州归属国家
+
+(State)
+    |
+IN_COUNTRY
+    |
+(Country)
+
+（7）用户兴趣画像
+
+(User)
+   |
+LIKES
+   |
+(Category)
+
+3. 最终Schema图
+
+                Country
+                   ↑
+             IN_COUNTRY
+                   ↑
+                 State
+                   ↑
+              IN_STATE
+                   ↑
+                  City
+                   ↑
+             LOCATED_IN
+                   ↑
+              Restaurant
+              /        \
+     BELONGS_TO      REVIEWED
+          ↑              ↑
+      Category         User
+          ↑
+        LIKES
+          ↑
+        User
+
+
+二、命令查询
+
+第一部分 图谱规模统计
+节点统计
+
+MATCH (n)
+RETURN labels(n),count(*);
+
+关系统计
+
+MATCH ()-[r]->()
+RETURN type(r),count(*);
+
+第二部分 知识图谱展示
+用户-餐厅-分类
+
+MATCH p=
+(u:User)-[:REVIEWED]->
+(r:Restaurant)-[:BELONGS_TO]->
+(c:Category)
+
+RETURN p
+LIMIT 50;
+
+餐厅地理层级
+
+MATCH p=
+(r:Restaurant)-[:LOCATED_IN]->
+(city:City)-[:IN_STATE]->
+(state:State)-[:IN_COUNTRY]->
+(country:Country)
+
+RETURN p
+LIMIT 50;
+
+用户画像
+
+MATCH p=
+(u:User)-[:LIKES]->
+(c:Category)
+
+RETURN p
+LIMIT 50;
+
+第三部分 查询能力
+高评分餐厅
+
+MATCH (r:Restaurant)
+
+RETURN
+r.name,
+r.rating,
+r.review_count
+
+ORDER BY r.rating DESC
+
+LIMIT 10;
+
+热门菜系
+
+MATCH
+(r:Restaurant)-[:BELONGS_TO]->
+(c:Category)
+
+RETURN
+c.name,
+count(*) AS cnt
+
+ORDER BY cnt DESC
+
+LIMIT 10;
+
+热门城市
+
+MATCH
+(r:Restaurant)-[:LOCATED_IN]->
+(city:City)
+
+RETURN
+city.name,
+count(*) AS cnt
+
+ORDER BY cnt DESC
+
+LIMIT 10;
+
+活跃用户
+
+MATCH (u:User)
+
+RETURN
+u.username,
+u.review_count
+
+ORDER BY u.review_count DESC
+
+LIMIT 10;
+
+第四部分 推荐支撑能力
+用户兴趣推荐
+
+MATCH
+(u:User)-[:LIKES]->
+(c:Category)<-[:BELONGS_TO]-
+(r:Restaurant)
+
+RETURN
+u.username,
+c.name,
+r.name,
+r.rating
+
+ORDER BY r.rating DESC
+
+LIMIT 50;
+
+同菜系推荐
+
+MATCH
+(r:Restaurant)-[:BELONGS_TO]->
+(c:Category)
+
+WHERE c.name="Chinese"
+
+RETURN
+r.name,
+r.rating
+
+ORDER BY r.rating DESC
+
+LIMIT 20;
+
+城市推荐
+
+MATCH
+(r:Restaurant)-[:LOCATED_IN]->
+(city:City)
+
+WHERE city.name="Tampa"
+
+RETURN
+r.name,
+r.rating
+
+ORDER BY r.rating DESC
+
+LIMIT 20;
+
+第五部分 性能优化实验
+Step1 查看索引
+
+SHOW INDEXES;
+
+
+Step2 查看约束
+
+SHOW CONSTRAINTS;
+
+
+Step3 模拟优化前
+由于：
+
+Restaurant.address
+没有索引
+执行：
+
+PROFILE
+
+MATCH (r:Restaurant)
+
+WHERE r.address CONTAINS "Street"
+
+RETURN r
+
+LIMIT 10;
+预计看到：
+
+NodeByLabelScan
+
+
+Step4 优化后
+可以获取真实ID
+
+MATCH (r:Restaurant)
+
+RETURN
+r.id,
+r.name
+
+LIMIT 5;
+
+选一个ID执行，如：
+PROFILE
+
+MATCH (r:Restaurant)
+
+WHERE r.id="awOKeCwbzutECzI4R6JGFg"
+
+RETURN r;
+出现：
+
+NodeUniqueIndexSeek
+
+
+Step5 Category索引优化
+
+PROFILE
+
+MATCH (c:Category)
+
+WHERE c.name="Chinese"
+
+RETURN c;
+
+
+Step6 City索引优化
+先查看真实城市：
+
+MATCH (c:City)
+
+RETURN c.name
+
+LIMIT 20;
+
+选一个城市执行，如：
+PROFILE
+
+MATCH (c:City)
+
+WHERE c.name="Eagle"
+
+RETURN c;
