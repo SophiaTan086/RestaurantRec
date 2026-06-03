@@ -109,6 +109,15 @@ def create_in_country(tx, state_name, country_name):
     """, state_name=state_name, country_name=country_name)
 
 # ----------------------
+# 用户画像：User -> LIKES -> Category
+# ----------------------
+def create_user_likes(tx, user_id, category_name):
+    tx.run("""
+        MATCH (u:User {id:$user_id}), (c:Category {name:$category_name})
+        MERGE (u)-[:LIKES]->(c)
+    """, user_id=user_id, category_name=category_name)
+
+# ----------------------
 # 批量构建
 # ----------------------
 with driver.session() as session:
@@ -163,68 +172,34 @@ with driver.session() as session:
     for state in states:
         session.execute_write(create_in_country, state, country_name)
 
+    # 8. 用户画像：计算每个用户喜欢的分类
+    print("创建用户画像 LIKES 关系...")
+    # 按用户ID统计评论过的餐厅所属分类
+    user_categories = {}
+    for _, row in review_df.iterrows():
+        user_id = row["用户ID"]
+        restaurant_id = row["商家ID"]
+        categories = restaurant_df.loc[restaurant_df["商家ID"]==restaurant_id, "分类"].values
+        if len(categories) > 0:
+            cats = str(categories[0]).split(",")
+            if user_id not in user_categories:
+                user_categories[user_id] = set()
+            for cat in cats:
+                cat = cat.strip()
+                if cat:
+                    user_categories[user_id].add(cat)
+    # 创建关系
+    for user_id, cats in user_categories.items():
+        for cat in cats:
+            session.execute_write(create_user_likes, user_id, cat)
+
+    # 9. 建索引和唯一约束
+    print("创建索引和唯一约束...")
+    session.execute_write(lambda tx: tx.run("CREATE CONSTRAINT IF NOT EXISTS FOR (r:Restaurant) REQUIRE r.id IS UNIQUE"))
+    session.execute_write(lambda tx: tx.run("CREATE CONSTRAINT IF NOT EXISTS FOR (u:User) REQUIRE u.id IS UNIQUE"))
+    session.execute_write(lambda tx: tx.run("CREATE INDEX IF NOT EXISTS FOR (c:Category) ON (c.name)"))
+    session.execute_write(lambda tx: tx.run("CREATE INDEX IF NOT EXISTS FOR (c:City) ON (c.name)"))
+    session.execute_write(lambda tx: tx.run("CREATE INDEX IF NOT EXISTS FOR (s:State) ON (s.name)"))
+    session.execute_write(lambda tx: tx.run("CREATE INDEX IF NOT EXISTS FOR (c:Country) ON (c.name)"))
+
 print("知识图谱构建完成！")
-#命令查询：
-# 1. 图谱统计
-# MATCH (n)
-# RETURN labels(n), count(*)
-
-# MATCH ()-[r]->()
-# RETURN type(r), count(*)
-
-# 2. 全路径可视化（用户→餐厅→分类→城市→州→国家）
-# MATCH p=
-# (u:User)-[:REVIEWED]->(r:Restaurant)-[:BELONGS_TO]->(c:Category),
-# (r)-[:LOCATED_IN]->(city:City)-[:IN_STATE]->(state:State)-[:IN_COUNTRY]->(country:Country)
-# RETURN p
-# LIMIT 50;
-
-# 3. 用户评论路径
-# MATCH p=
-# (u:User)-[:REVIEWED]->(r:Restaurant)-[:BELONGS_TO]->(c:Category)
-# RETURN p
-# LIMIT 50;
-
-# 4. 地理层级路径
-# MATCH p=
-# (r:Restaurant)-[:LOCATED_IN]->(city:City)-[:IN_STATE]->(state:State)-[:IN_COUNTRY]->(country:Country)
-# RETURN p
-# LIMIT 50;
-
-# 5. 高评分餐厅
-# MATCH (r:Restaurant)
-# RETURN r.name,r.rating,r.review_count
-# ORDER BY r.rating DESC
-# LIMIT 10;
-
-# 6. 热门菜系
-# MATCH (r:Restaurant)-[:BELONGS_TO]->(c:Category)
-# RETURN c.name, count(*) AS restaurant_count
-# ORDER BY restaurant_count DESC
-# LIMIT 10;
-
-# 7. 活跃用户
-# MATCH (u:User)
-# RETURN u.username, u.review_count
-# ORDER BY u.review_count DESC
-# LIMIT 10;
-
-# 8. 热门城市餐厅数量
-# MATCH (r:Restaurant)-[:LOCATED_IN]->(c:City)
-# RETURN c.name, count(*) AS restaurant_count
-# ORDER BY restaurant_count DESC
-# LIMIT 10;
-
-# 9. 同菜系推荐示例
-# MATCH (r:Restaurant)-[:BELONGS_TO]->(c:Category)
-# WHERE c.name="Chinese"
-# RETURN r.name, r.rating
-# ORDER BY r.rating DESC
-# LIMIT 20;
-
-# 10. 用户兴趣推荐示例
-# MATCH (u:User)-[:REVIEWED]->(r1:Restaurant)-[:BELONGS_TO]->(c:Category)
-# WITH u,c
-# MATCH (r2:Restaurant)-[:BELONGS_TO]->(c)
-# RETURN u.username, c.name, r2.name, r2.rating
-# LIMIT 50;
