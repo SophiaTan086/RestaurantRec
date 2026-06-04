@@ -6,5 +6,4 @@ RESTAURANTREC-MAIN/
 ├── build_kg.py                # 构建知识图谱
 ├── recommender.py             # 核心推荐算法
 ├── app.py                     # 交互前端       
-├── run.bat                    # 本地运行
 └── requirements.txt           # 依赖列表
