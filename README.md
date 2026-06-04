@@ -1,3 +1,4 @@
+```
 RESTAURANTREC-MAIN/
 ├── dataset/
 │   ├── restaurant.csv         # 餐厅基本信息数据集
@@ -7,3 +8,4 @@ RESTAURANTREC-MAIN/
 ├── recommender.py             # 核心推荐算法
 ├── app.py                     # 交互前端       
 └── requirements.txt           # 依赖列表
+```
