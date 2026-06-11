@@ -7,16 +7,16 @@ from neo4j import GraphDatabase
 # ----------------------
 URI = "bolt://localhost:7687"
 USER = "neo4j"
-PASSWORD = "VCq3jnjvJ7eWnv2"
+PASSWORD = "12345678"
 
 driver = GraphDatabase.driver(URI, auth=(USER, PASSWORD))
 
 # ----------------------
 # 读取 CSV
 # ----------------------
-restaurant_df = pd.read_csv("restaurant.csv")
-user_df = pd.read_csv("user.csv")
-review_df = pd.read_csv("review.csv")
+restaurant_df = pd.read_csv("dataset/restaurant.csv")
+user_df = pd.read_csv("dataset/user.csv")
+review_df = pd.read_csv("dataset/review.csv")
 
 # ----------------------
 # 节点创建
@@ -61,11 +61,14 @@ def create_review_relation(tx, row):
     tx.run("""
         MATCH (u:User {id:$user_id}), (r:Restaurant {id:$restaurant_id})
         MERGE (u)-[rel:REVIEWED]->(r)
-        SET rel.rating=$rating, rel.review_time=$review_time
+        SET rel.rating=$rating, 
+            rel.text=$text,
+            rel.review_time=$review_time
     """,
     user_id=row["用户ID"],
     restaurant_id=row["商家ID"],
     rating=row["评分"],
+    text=row["评语"],
     review_time=row["评论时间"]
     )
 
